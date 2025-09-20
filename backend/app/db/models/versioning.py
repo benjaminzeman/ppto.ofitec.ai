@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, ForeignKey, String, Numeric, DateTime, Text
+from sqlalchemy import Column, Integer, ForeignKey, String, Numeric, DateTime, Text, func
 from app.db.base import Base
 
 class BudgetVersion(Base):
@@ -7,7 +7,7 @@ class BudgetVersion(Base):
     project_id = Column(Integer, ForeignKey("projects.id", ondelete="CASCADE"), index=True)
     name = Column(String, nullable=False)
     note = Column(Text)
-    created_at = Column(DateTime)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
 
 class BudgetVersionItem(Base):
     __tablename__ = "budget_version_items"

@@ -4,6 +4,7 @@ from app.db.session import get_db
 from app.api.v1.auth import get_current_user
 from app.db.models.versioning import BudgetVersion, BudgetVersionItem
 from app.db.models.budget import Item, Chapter
+from app.db.models.project import Project
 
 router = APIRouter()
 
@@ -42,3 +43,16 @@ async def snapshot(project_id: int, name: str, note: str | None = None, db: Sess
 @router.get("/diff")
 async def diff(v_from: int, v_to: int, db: Session = Depends(get_db)):
     return diff_logic(db, v_from, v_to)
+
+@router.post("/{project_id}/baseline")
+def set_baseline(project_id: int, version_id: int, db: Session = Depends(get_db), user=Depends(get_current_user)):
+    project = db.get(Project, project_id)
+    if not project:
+        raise HTTPException(404, "Project not found")
+    ver = db.get(BudgetVersion, version_id)
+    if not ver or ver.project_id != project_id:
+        raise HTTPException(400, "Version inválida para este proyecto")
+    project.baseline_version_id = version_id
+    db.commit()
+    return {"project_id": project_id, "baseline_version_id": version_id}
+
