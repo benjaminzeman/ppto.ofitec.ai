@@ -2,6 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 from app.db.session import get_db
+from app.api.v1.auth import get_current_user
 from app.db.models.project import Project
 from app.db.models.budget import Chapter, Item, Resource, APU
 from app.services.kpis import compute_item_price
@@ -17,7 +18,7 @@ async def list_projects(db: Session = Depends(get_db)):
     return db.query(Project).all()
 
 @router.post("/projects")
-async def create_project(p: ProjectIn, db: Session = Depends(get_db)):
+async def create_project(p: ProjectIn, db: Session = Depends(get_db), user=Depends(get_current_user)):
     obj = Project(name=p.name, currency=p.currency)
     db.add(obj)
     db.commit(); db.refresh(obj)
@@ -29,7 +30,7 @@ class ChapterIn(BaseModel):
     name: str
 
 @router.post("/chapters")
-async def create_chapter(c: ChapterIn, db: Session = Depends(get_db)):
+async def create_chapter(c: ChapterIn, db: Session = Depends(get_db), user=Depends(get_current_user)):
     obj = Chapter(**c.dict())
     db.add(obj); db.commit(); db.refresh(obj)
     return obj
@@ -42,7 +43,7 @@ class ItemIn(BaseModel):
     quantity: float = 0
 
 @router.post("/items")
-async def create_item(i: ItemIn, db: Session = Depends(get_db)):
+async def create_item(i: ItemIn, db: Session = Depends(get_db), user=Depends(get_current_user)):
     obj = Item(**i.dict())
     db.add(obj); db.commit(); db.refresh(obj)
     return obj
@@ -56,7 +57,7 @@ class APULineIn(BaseModel):
     coeff: float
 
 @router.post("/items/{item_id}/apu")
-async def set_apu(item_id: int, lines: list[APULineIn], db: Session = Depends(get_db)):
+async def set_apu(item_id: int, lines: list[APULineIn], db: Session = Depends(get_db), user=Depends(get_current_user)):
     item = db.get(Item, item_id)
     if not item:
         raise HTTPException(404, "Item not found")
