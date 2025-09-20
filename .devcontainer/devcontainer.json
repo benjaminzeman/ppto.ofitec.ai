@@ -3,6 +3,7 @@
   "dockerComposeFile": ["../docker-compose.yml"],
   "service": "backend",
   "workspaceFolder": "/workspaces/pptosofitec.ai",
+  "runServices": ["db", "redis", "backend", "frontend"],
   "features": {},
   "customizations": {
     "vscode": {
@@ -11,10 +12,11 @@
         "ms-python.vscode-pylance",
         "ms-azuretools.vscode-docker",
         "esbenp.prettier-vscode",
-        "ms-python.black-formatter"
+        "ms-python.black-formatter",
+        "eamodio.gitlens"
       ]
     }
   },
-  "forwardPorts": [3001,5555],
-  "postCreateCommand": "pip install -r backend/requirements.txt || true"
+  "forwardPorts": [3001, 5555],
+  "postCreateCommand": "pip install -r backend/requirements.txt || true && cd frontend && npm install || true"
 }
