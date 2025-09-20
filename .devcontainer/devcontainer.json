@@ -17,6 +17,6 @@
       ]
     }
   },
-  "forwardPorts": [3001, 5555],
-  "postCreateCommand": "pip install -r backend/requirements.txt || true && cd frontend && npm install || true"
+  "forwardPorts": [3000, 5555],
+  "postCreateCommand": "pip install -r backend/requirements.txt"
 }
