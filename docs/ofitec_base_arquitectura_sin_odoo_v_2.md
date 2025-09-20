@@ -1,0 +1,3 @@
+# OFITEC · Base Arquitectura (sin Odoo) – v2
+
+...existing content...
