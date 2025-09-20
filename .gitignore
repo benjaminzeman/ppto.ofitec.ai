@@ -1,0 +1,24 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.sqlite3
+.env
+.venv/
+
+# Node
+node_modules/
+.next/
+.next-cache/
+
+# OS / Misc
+.DS_Store
+.idea/
+.vscode/
+
+# Docker
+/data/
+
+# Reports / temp
+*.log
+*.tmp
