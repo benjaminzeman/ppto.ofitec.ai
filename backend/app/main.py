@@ -1,6 +1,6 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from app.api.v1 import budgets, measurements, imports, purchases, auth, versions, evm, exports
+from app.api.v1 import budgets, measurements, imports, purchases, auth, versions, evm, exports, jobs
 
 app = FastAPI(title="OFITEC API", version="0.1.0")
 
@@ -20,6 +20,7 @@ app.include_router(purchases.router, prefix="/api/v1/purchases", tags=["purchase
 app.include_router(versions.router, prefix="/api/v1/versions", tags=["versions"])
 app.include_router(evm.router, prefix="/api/v1/evm", tags=["evm"])
 app.include_router(exports.router, prefix="/api/v1/exports", tags=["exports"])
+app.include_router(jobs.router, prefix="/api/v1/jobs", tags=["jobs"])
 
 @app.get("/health")
 async def health():
