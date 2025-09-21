@@ -2,6 +2,13 @@ from logging.config import fileConfig
 from sqlalchemy import engine_from_config, pool
 from alembic import context
 import os
+import sys
+
+# Asegurar path correcto para importar paquete app cuando se invoca alembic desde fuera
+BASE_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
+if BASE_DIR not in sys.path:
+    sys.path.insert(0, BASE_DIR)
+
 from app.db.base import Base  # para metadata si se agrega autogenerate
 
 config = context.config

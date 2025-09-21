@@ -1,0 +1,6 @@
+Snapshot: snapshot_20250920_213804_8dc77b3c
+Fecha: 2025-09-20T21:38:04+00:00
+HEAD Hash: 8dc77b3c0c93572eae2475a7949fb92cbe89fcb6
+Exclusiones: .venv, __pycache__, *.log, .git (parcial)
+Usuario: appuser
+Hostname: e9a8f34a0f42

@@ -1,9 +1,9 @@
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker, Session
-import os
+from app.core.settings import get_settings
 
-DATABASE_URL = os.getenv("DATABASE_URL", "sqlite:///./dev.db")
-engine = create_engine(DATABASE_URL, pool_pre_ping=True)
+settings = get_settings()
+engine = create_engine(settings.database_url, pool_pre_ping=True)
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
 def get_db() -> Session:

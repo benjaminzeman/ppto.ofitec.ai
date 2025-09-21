@@ -1,5 +1,6 @@
 from app.db.models.project import Project
 from app.db.models.budget import Chapter, Item
+from app.db.models.audit import UserProjectRole
 
 
 def seed_basic_budget(db):
@@ -14,6 +15,18 @@ def seed_basic_budget(db):
 
 def test_snapshot_and_diff(client, db_session, auth_token):
     p, it = seed_basic_budget(db_session)
+    # Asignar rol admin explícito al usuario autenticado sobre el proyecto seed
+    from app.services.security import decode_token
+    username = decode_token(auth_token)
+    # Crear un usuario en la DB de tests con ese username si fuera necesario
+    from app.db.models.user import User
+    u = db_session.query(User).filter_by(username=username).first()
+    if not u:
+        u = User(username=username, hashed_password="x")
+        db_session.add(u); db_session.flush()
+    if not db_session.query(UserProjectRole).filter_by(user_id=u.id, project_id=p.id).first():
+        db_session.add(UserProjectRole(user_id=u.id, project_id=p.id, role="admin"))
+    db_session.commit()
     # snapshot 1
     r1 = client.post(f"/api/v1/versions/{p.id}/snapshot?name=V1", headers={"Authorization": f"Bearer {auth_token}"})
     assert r1.status_code == 200

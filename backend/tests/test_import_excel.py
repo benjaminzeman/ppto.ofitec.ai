@@ -30,3 +30,15 @@ def test_import_excel_endpoint(client, auth_token):
     assert r.status_code == 200
     pid = r.json()["project_id"]
     assert isinstance(pid, int)
+
+    # Verificar rol asignado automáticamente (admin)
+    r_roles = client.get(f"/api/v1/budgets/projects/{pid}/roles", headers={"Authorization": f"Bearer {auth_token}"})
+    assert r_roles.status_code == 200
+    roles = r_roles.json()
+    assert any(r["role"] == "admin" for r in roles)
+
+    # Verificar que existe registro de auditoría para import_excel
+    r_audit = client.get(f"/api/v1/budgets/projects/{pid}/audit", headers={"Authorization": f"Bearer {auth_token}"})
+    assert r_audit.status_code == 200
+    audit = r_audit.json()
+    assert any(a["action"] == "import_excel" for a in audit)

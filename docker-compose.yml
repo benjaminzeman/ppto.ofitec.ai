@@ -7,18 +7,40 @@ services:
       POSTGRES_PASSWORD: ofitec
     ports: ["5432:5432"]
     volumes: ["pgdata:/var/lib/postgresql/data"]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ofitec"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 5s
 
   redis:
     image: redis:7
     ports: ["6379:6379"]
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+      start_period: 5s
 
   backend:
     build: ./backend
     env_file: .env
-    depends_on: [db, redis]
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
     ports: ["5555:5555"]
     volumes: ["./backend:/app"]
     command: ["sh", "-c", "python app/wait_for_db.py && uvicorn app.main:app --host 0.0.0.0 --port 5555 --reload"]
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:5555/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
 
   frontend:
     build: ./frontend

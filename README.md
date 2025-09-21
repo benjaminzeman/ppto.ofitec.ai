@@ -7,6 +7,7 @@ Monorepo con **frontend (Next.js 14)** y **backend (FastAPI)** implementando nú
 - Versionado (snapshots y diff)
 - Compras / Comparativos inicial (RFQ, cotizaciones, ranking)
 - Autenticación JWT básica
+- RBAC por proyecto (roles: admin, editor, viewer) + Auditoría de acciones clave
 
 Basado en los documentos de arquitectura y sprints (v2 sin Odoo) con evolución incremental.
 
@@ -66,8 +67,8 @@ Presupuestos:
 - `POST /api/v1/budgets/items/{item_id}/apu` (auth)
 
 Importación:
-- `POST /api/v1/imports/excel` (auth) – Genera proyecto desde .xlsx
-- `POST /api/v1/imports/bc3` (auth) – Parser BC3 simplificado
+- `POST /api/v1/imports/excel` (auth) – Genera proyecto desde .xlsx (rol admin asignado al creador)
+- `POST /api/v1/imports/bc3` (auth) – Parser BC3 simplificado (rol admin asignado al creador)
 
 Mediciones:
 - `POST /api/v1/measurements` (auth) – Registrar medición
@@ -83,6 +84,11 @@ Compras / Comparativos:
 - `POST /api/v1/purchases/rfq` (auth)
 - `POST /api/v1/purchases/quote` (auth)
 - `GET  /api/v1/purchases/rank/{rfq_id}` (auth) – Ranking por total
+
+Roles & Auditoría:
+- `GET /api/v1/budgets/projects/{project_id}/roles`
+- `POST /api/v1/budgets/projects/{project_id}/roles` (admin)
+- `GET /api/v1/budgets/projects/{project_id}/audit` (cualquier rol del proyecto)
 
 Health: `GET /health`
 
@@ -104,6 +110,24 @@ R;IT1;MAT;R1;Recurso 1;2;5
 R;IT1;MO;R2;Mano Obra;0.5;40
 ```
 
+### Ejemplo flujo completo con RBAC y auditoría
+```
+# Registrar usuario y obtener token
+TOKEN=$(curl -s -X POST http://localhost:5555/api/v1/auth/register -H 'Content-Type: application/json' -d '{"username":"demo","password":"demo"}' | jq -r .access_token)
+
+# Importar BC3 (crea proyecto y asigna rol admin al usuario)
+curl -X POST http://localhost:5555/api/v1/imports/bc3 \
+	-H "Authorization: Bearer $TOKEN" \
+	-F project_name=ProyectoBC3 \
+	-F file=@sample.bc3
+
+# Suponiendo project_id=1, listar roles
+curl -H "Authorization: Bearer $TOKEN" http://localhost:5555/api/v1/budgets/projects/1/roles | jq
+
+# Ver auditoría (incluye acción import_bc3 y posteriores)
+curl -H "Authorization: Bearer $TOKEN" http://localhost:5555/api/v1/budgets/projects/1/audit | jq '.[].action' | sort -u
+```
+
 ### Tests
 Se añadieron tests básicos (`pytest`) para: cálculo APU, import Excel, import BC3, snapshot/diff versiones.
 ```bash
@@ -115,11 +139,11 @@ docker compose run --rm backend pytest -q
 - Mediciones avanzadas: baseline, Curva S, CPI/SPI, ETC/EAC
 - Exportaciones PDF/Excel (presupuesto, mediciones, versiones, diffs)
 - Jobs background (Redis/RQ) para import y reportes pesados
-- Roles / RBAC y permisos por proyecto
+- Ampliar RBAC granular (permisos por entidad)
 - CRUD completo (updates/deletes) y endpoints de lectura agregada avanzada
 - Observabilidad: métricas Prometheus, logging estructurado, tracing
 - Frontend: vistas completas (mediciones, versiones, diff, compras)
-- Parser BC3 extendido (más campos FIEBDC-3)
+- Parser BC3 extendido (más campos FIEBDC-3 + validaciones profundas)
 
 ### Variables de entorno clave (.env)
 ```
@@ -136,7 +160,7 @@ NEXT_PUBLIC_API_BASE=http://localhost:5555
 - Implementar roles y control de acceso por proyecto (pendiente).
 
 ### Estado Actual
-MVP enriquecido operativo con: auth, importadores, mediciones básicas, versiones (diff), módulo compras inicial y tests básicos.
+MVP enriquecido operativo con: auth, importadores (Excel/BC3), mediciones básicas, versiones (diff), módulo compras inicial, RBAC básico y auditoría de acciones críticas, y tests básicos.
 
 ### Desarrollo local sin Docker (opcional)
 ```bash

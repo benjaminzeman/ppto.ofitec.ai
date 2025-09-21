@@ -1,4 +1,7 @@
 import tempfile
+from sqlalchemy.orm import Session
+from app.db.models.audit import UserProjectRole, AuditLog
+from app.db.session import get_db
 
 BC3_SAMPLE = """# Demo BC3
 C;C1;Capitulo 1
@@ -17,4 +20,17 @@ def test_import_bc3(client, auth_token):
         data = {"project_name": "Proyecto BC3"}
     r = client.post("/api/v1/imports/bc3", data=data, files=files, headers={"Authorization": f"Bearer {auth_token}"})
     assert r.status_code == 200
-    assert isinstance(r.json()["project_id"], int)
+    project_id = r.json()["project_id"]
+    assert isinstance(project_id, int)
+
+    # Listar roles del proyecto (debe existir admin)
+    rroles = client.get(f"/api/v1/budgets/projects/{project_id}/roles", headers={"Authorization": f"Bearer {auth_token}"})
+    assert rroles.status_code == 200
+    roles = rroles.json()
+    assert any(r["role"] == "admin" for r in roles)
+
+    # Auditoría debe contener import_bc3
+    raudit = client.get(f"/api/v1/budgets/projects/{project_id}/audit", headers={"Authorization": f"Bearer {auth_token}"})
+    assert raudit.status_code == 200
+    actions = {a["action"] for a in raudit.json()}
+    assert "import_bc3" in actions

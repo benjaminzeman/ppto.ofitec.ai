@@ -1,72 +1,76 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
+from sqlalchemy import func
 from app.db.session import get_db
-from app.db.models.project import Project
-from app.db.models.versioning import BudgetVersion, BudgetVersionItem
-from app.db.models.budget import Item, Chapter
-from app.db.models.measurement import Measurement
-from decimal import Decimal, DivisionByZero
+from app.api.v1.auth import get_current_user
+from app.db.models.budget import Item, Chapter, MeasurementBatch, MeasurementLine
 
 router = APIRouter()
 
 
-def _get_baseline_version(db: Session, project: Project):
-    if not project.baseline_version_id:
-        raise HTTPException(400, "Proyecto sin baseline definida")
-    return db.get(BudgetVersion, project.baseline_version_id)
+@router.get("/projects/{project_id}")
+def evm_overview(project_id: int, db: Session = Depends(get_db), user=Depends(get_current_user)):
+    # Cargar items presupuesto
+    items = db.query(Item).join(Chapter, Item.chapter_id==Chapter.id).filter(Chapter.project_id==project_id, Item.deleted_at.is_(None), Chapter.deleted_at.is_(None)).all()
+    if not items:
+        # Retornar métricas vacías en lugar de 404 para facilitar consumo temprano
+        return {"project_id": project_id, "planned_value": 0, "earned_value": 0, "actual_cost": 0, "spi": 0, "cpi": 0, "curve_s": []}
+    def _f(v):
+        try:
+            return float(v) if v is not None else 0.0
+        except Exception:
+            return 0.0
+    total_budget = 0.0
+    for it in items:
+        total_budget += _f(it.quantity) * _f(it.price)
+    # EV y AC (por ahora AC = EV al no tener costos reales separados)
+    # Ejecutado por item
+    sub_exec = db.query(
+        MeasurementLine.item_id,
+        func.coalesce(func.sum(MeasurementLine.qty), 0).label("exec_qty")
+    ).join(MeasurementBatch, MeasurementLine.batch_id==MeasurementBatch.id).filter(
+        MeasurementBatch.project_id==project_id,
+        MeasurementBatch.status=='closed'
+    ).group_by(MeasurementLine.item_id).subquery()
+    earned_value = 0.0
+    for it in items:
+        exec_row = db.query(sub_exec.c.exec_qty).filter(sub_exec.c.item_id==it.id).first()
+        exec_qty = _f(exec_row[0]) if exec_row and exec_row[0] is not None else 0.0
+        earned_value += exec_qty * _f(it.price)
+    planned_value = total_budget  # simplificación: PV total asumido igual al presupuesto completo (sin calendario)
+    actual_cost = earned_value  # sin costo real separado aún
+    spi = (earned_value / planned_value) if planned_value > 0 else 0
+    cpi = (earned_value / actual_cost) if actual_cost > 0 else 0
 
-
-@router.get("/{project_id}/summary")
-def evm_summary(project_id: int, db: Session = Depends(get_db)):
-    project = db.get(Project, project_id)
-    if not project:
-        raise HTTPException(404, "Proyecto no encontrado")
-    baseline = _get_baseline_version(db, project)
-    # Obtener líneas baseline
-    bl_items = db.query(BudgetVersionItem).filter(BudgetVersionItem.version_id == baseline.id).all()
-    bl_map = {b.item_code: b for b in bl_items}
-
-    # Costo planificado total (BAC)
-    BAC = Decimal("0")
-    for b in bl_items:
-        qty = Decimal(str(b.qty or 0))
-        pu = Decimal(str(b.unit_price or 0))
-        BAC += qty * pu
-
-    # Actual (ítems vivos actuales)
-    current_items = db.query(Item).join(Chapter, Chapter.id == Item.chapter_id).filter(Chapter.project_id == project_id).all()
-    AC = Decimal("0")  # Actual Cost usando precio actual * qty medida
-    EV = Decimal("0")  # Earned Value
-    PV = BAC            # Simplificación: PV = BAC (sin distribución temporal todavía)
-
-    for it in current_items:
-        measured_qty = sum(Decimal(str(m.qty)) for m in db.query(Measurement).filter(Measurement.item_id == it.id))
-        price_current = Decimal(str(it.price or 0))
-        AC += measured_qty * price_current
-        if it.code in bl_map:
-            bl_line = bl_map[it.code]
-            bl_qty = Decimal(str(bl_line.qty or 0))
-            bl_price = Decimal(str(bl_line.unit_price or 0))
-            earned_qty = measured_qty if measured_qty < bl_qty else bl_qty
-            EV += earned_qty * bl_price
-
-    CPI = (EV / AC) if AC > 0 else None
-    SPI = (EV / PV) if PV > 0 else None
-    ETC = (BAC - EV) / CPI if CPI and CPI != 0 else None
-    EAC = AC + ETC if ETC is not None else None
-
-    def _d(val):
-        return float(val) if val is not None else None
+    # Curva S: acumulado EV por batch cerrado en orden cronológico
+    batches = db.query(MeasurementBatch).filter(
+        MeasurementBatch.project_id==project_id,
+        MeasurementBatch.status=='closed'
+    ).order_by(MeasurementBatch.created_at).all()
+    curve = []
+    cumulative_ev = 0.0
+    for b in batches:
+        # EV batch = suma qty * precio item para líneas del batch
+        lines = db.query(MeasurementLine, Item).join(Item, MeasurementLine.item_id==Item.id).filter(MeasurementLine.batch_id==b.id).all()
+        batch_ev = 0.0
+        for ml, it in lines:
+            batch_ev += _f(ml.qty) * _f(it.price)
+        cumulative_ev += batch_ev
+        curve.append({
+            "batch_id": b.id,
+            "name": b.name,
+            "status": b.status,
+            "batch_ev": batch_ev,
+            "cumulative_ev": cumulative_ev,
+            "created_at": b.created_at
+        })
 
     return {
         "project_id": project_id,
-        "baseline_version_id": project.baseline_version_id,
-        "BAC": _d(BAC),
-        "AC": _d(AC),
-        "EV": _d(EV),
-        "PV": _d(PV),
-        "CPI": _d(CPI),
-        "SPI": _d(SPI),
-        "ETC": _d(ETC),
-        "EAC": _d(EAC)
+        "planned_value": planned_value,
+        "earned_value": earned_value,
+        "actual_cost": actual_cost,
+        "spi": spi,
+        "cpi": cpi,
+        "curve_s": curve
     }
